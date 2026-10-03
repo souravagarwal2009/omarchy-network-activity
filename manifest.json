@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "custom.network-activity",
+  "name": "Network Activity",
+  "version": "1.1.0",
+  "author": "Custom",
+  "description": "Live download and upload speed in the bar with real-time traffic graph",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Network Activity",
+    "description": "Live network bandwidth speed and real-time activity graph",
+    "category": "Network",
+    "allowMultiple": false,
+    "defaultSection": "left"
+  }
+}

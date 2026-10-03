@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# Network activity monitor for Omarchy top bar & popup
+STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/omarchy_net_speed_${UID}.state"
+NOW=$(date +%s%N)
+
+rx_total=0
+tx_total=0
+
+while read -r line; do
+  if [[ "$line" =~ ^[[:space:]]*([a-zA-Z0-9_-]+):[[:space:]]*([0-9]+)[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+[0-9]+[[:space:]]+([0-9]+) ]]; then
+    iface="${BASH_REMATCH[1]}"
+    rx="${BASH_REMATCH[2]}"
+    tx="${BASH_REMATCH[3]}"
+    # Ignore loopback
+    if [[ "$iface" != "lo" ]]; then
+      rx_total=$((rx_total + rx))
+      tx_total=$((tx_total + tx))
+    fi
+  fi
+done < /proc/net/dev
+
+format_speed() {
+  local bytes=$1
+  if (( bytes < 1024 )); then
+    printf "%d B/s" "$bytes"
+  elif (( bytes < 1048576 )); then
+    local kb_int=$(( bytes / 1024 ))
+    local kb_dec=$(( (bytes % 1024) * 10 / 1024 ))
+    printf "%d.%d KB/s" "$kb_int" "$kb_dec"
+  elif (( bytes < 1073741824 )); then
+    local mb_int=$(( bytes / 1048576 ))
+    local mb_dec=$(( (bytes % 1048576) * 10 / 1048576 ))
+    printf "%d.%d MB/s" "$mb_int" "$mb_dec"
+  else
+    local gb_int=$(( bytes / 1073741824 ))
+    local gb_dec=$(( (bytes % 1073741824) * 10 / 1073741824 ))
+    printf "%d.%d GB/s" "$gb_int" "$gb_dec"
+  fi
+}
+
+down_str="0 B/s"
+up_str="0 B/s"
+rx_bps=0
+tx_bps=0
+
+if [[ -f "$STATE_FILE" ]]; then
+  read -r prev_time prev_rx prev_tx < "$STATE_FILE" 2>/dev/null
+  if [[ -n "$prev_time" && -n "$prev_rx" && -n "$prev_tx" ]]; then
+    time_diff=$(( NOW - prev_time ))
+    if (( time_diff > 0 )); then
+      rx_diff=$(( rx_total - prev_rx ))
+      tx_diff=$(( tx_total - prev_tx ))
+      if (( rx_diff < 0 )); then rx_diff=0; fi
+      if (( tx_diff < 0 )); then tx_diff=0; fi
+
+      rx_bps=$(( rx_diff * 1000000000 / time_diff ))
+      tx_bps=$(( tx_diff * 1000000000 / time_diff ))
+
+      down_str=$(format_speed "$rx_bps")
+      up_str=$(format_speed "$tx_bps")
+    fi
+  fi
+fi
+
+echo "$NOW $rx_total $tx_total" > "$STATE_FILE"
+
+text="↓ ${down_str} ↑ ${up_str}"
+tooltip="Network Activity\nDownload: ${down_str}\nUpload: ${up_str}"
+
+printf '{"text":"%s","tooltip":"%s","downRate":%d,"upRate":%d,"downStr":"%s","upStr":"%s"}\n' \
+  "$text" "$tooltip" "$rx_bps" "$tx_bps" "$down_str" "$up_str"
